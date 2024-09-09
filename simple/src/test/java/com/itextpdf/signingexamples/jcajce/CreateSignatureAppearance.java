@@ -13,6 +13,8 @@ import java.security.Security;
 import java.security.cert.Certificate;
 import java.util.Enumeration;
 
+import com.itextpdf.io.font.PdfEncodings;
+import com.itextpdf.kernel.font.PdfFont;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -60,6 +62,8 @@ import com.itextpdf.signatures.PrivateKeySignature;
  */
 class CreateSignatureAppearance {
     final static File RESULT_FOLDER = new File("target/test-outputs", "signature");
+
+    public static final String sourceFolder = "./src/test/resources/";
 
     final static String path = "keystore/johndoe.p12";
     final static char[] pass = "johndoe".toCharArray();
@@ -313,11 +317,18 @@ class CreateSignatureAppearance {
             pdfSigner.setPageRect(new Rectangle(100, 500, 300, 100));
             pdfSigner.setPageNumber(1);
 
-            String restriction = "The qualified electronic signature at hand is restricted to present offers, invoices or credit notes to customers according to EU REGULATION No 910/2014 (23 July 2014) and German VAT law (§14 UStG).";
-            pdfSigner.setReason(restriction);
+           // String restriction = "The qualified electronic signature at hand is restricted to present offers, invoices or credit notes to customers according to EU REGULATION No 910/2014 (23 July 2014) and German VAT law (§14 UStG).";
+            String chineseRestriction = "根据欧盟法规No 910/2014(2014年7月23日)和德国增值税法(§14 UStG)，合格的电子签名仅限于向客户提供报价、发票或信用票据。";
+            pdfSigner.setReason(chineseRestriction);
 
             SignatureFieldAppearance appearance = new SignatureFieldAppearance(pdfSigner.getFieldName());
-            appearance.setContent(restriction, data);
+            //仅文字(中文)
+            appearance.setContent(chineseRestriction);
+            PdfFont font = PdfFontFactory.createFont(sourceFolder + "NotoSerifCJKtc-Regular.ttf",
+                    PdfEncodings.IDENTITY_H);
+            appearance.setFont(font);
+            //图片加文字
+            //appearance.setContent(restriction, data);
             pdfSigner.setSignatureAppearance(appearance);
 
             IExternalSignature pks = new PrivateKeySignature(pk, "SHA256", BouncyCastleProvider.PROVIDER_NAME);
@@ -369,14 +380,14 @@ class CreateSignatureAppearance {
             ImageData badge = ImageDataFactory.create(StreamUtil.inputStreamToArray(badgeResource));
             ImageData sign = ImageDataFactory.create(StreamUtil.inputStreamToArray(signResource));
 
-            PdfSigner pdfSigner = new PdfSigner(pdfReader, result, new StampingProperties());
+            PdfSigner signer = new PdfSigner(pdfReader, result, new StampingProperties());
 
             Rectangle rectangle = new Rectangle(100, 500, 300, 100);
-            pdfSigner.setPageRect(rectangle);
-            pdfSigner.setPageNumber(1);
+            signer.setPageRect(rectangle);
+            signer.setPageNumber(1);
 
             PdfFormXObject foregroundLayer = new PdfFormXObject(rectangle);
-            PdfCanvas canvas = new PdfCanvas(foregroundLayer, pdfSigner.getDocument());
+            PdfCanvas canvas = new PdfCanvas(foregroundLayer, signer.getDocument());
 
             float xCenter = rectangle.getLeft() + rectangle.getWidth() / 2;
             float yCenter = rectangle.getBottom() + rectangle.getHeight() / 2;
@@ -385,22 +396,25 @@ class CreateSignatureAppearance {
             float badgeHeight = badgeWidth * badge.getHeight() / badge.getWidth();
 
             canvas.setLineWidth(20)
-                  .setStrokeColorRgb(.9f, .1f, .1f)
-                  .moveTo(rectangle.getLeft(), rectangle.getBottom())
-                  .lineTo(rectangle.getRight(), rectangle.getTop())
-                  .moveTo(xCenter + rectangle.getHeight(), yCenter - rectangle.getWidth())
-                  .lineTo(xCenter - rectangle.getHeight(), yCenter + rectangle.getWidth())
-                  .stroke();
+                    .setStrokeColorRgb(.9f, .1f, .1f)
+                    .moveTo(rectangle.getLeft(), rectangle.getBottom())
+                    .lineTo(rectangle.getRight(), rectangle.getTop())
+                    .moveTo(xCenter + rectangle.getHeight(), yCenter - rectangle.getWidth())
+                    .lineTo(xCenter - rectangle.getHeight(), yCenter + rectangle.getWidth())
+                    .stroke();
 
             sign.setTransparency(new int[] {0, 0});
-            canvas.addImageFittedIntoRectangle(sign, new Rectangle(0, yCenter, badgeWidth * sign.getWidth() / sign.getHeight() / 2, badgeWidth / 2), false);
+            canvas.addImageFittedIntoRectangle(sign,
+                    new Rectangle(0, yCenter, badgeWidth * sign.getWidth() / sign.getHeight() / 2, badgeWidth / 2), false);
 
-            canvas.concatMatrix(AffineTransform.getRotateInstance(Math.atan2(rectangle.getHeight(), rectangle.getWidth()), xCenter, yCenter));
-            canvas.addImageFittedIntoRectangle(badge, new Rectangle(xCenter - badgeWidth / 2, yCenter - badgeHeight + badgeWidth / 2, badgeWidth, badgeHeight), false);
-            pdfSigner.getSignatureField().setSignatureAppearanceLayer(foregroundLayer);
+            canvas.concatMatrix(AffineTransform
+                    .getRotateInstance(Math.atan2(rectangle.getHeight(), rectangle.getWidth()), xCenter, yCenter));
+            canvas.addImageFittedIntoRectangle(badge,
+                    new Rectangle(xCenter - badgeWidth / 2, yCenter - badgeHeight + badgeWidth / 2, badgeWidth, badgeHeight), false);
+            signer.getSignatureField().setSignatureAppearanceLayer(foregroundLayer);
 
             IExternalSignature pks = new PrivateKeySignature(pk, "SHA256", BouncyCastleProvider.PROVIDER_NAME);
-            pdfSigner.signDetached(new BouncyCastleDigest(), pks, chain, null, null, null, 0, CryptoStandard.CMS);
+            signer.signDetached(new BouncyCastleDigest(), pks, chain, null, null, null, 0, CryptoStandard.CMS);
         }
     }
 
@@ -565,7 +579,7 @@ class CreateSignatureAppearance {
 
     void createSpecialAppearance(PdfSignatureFormField field, PdfDocument pdfDocument) throws IOException {
         PdfWidgetAnnotation widget = field.getWidgets().get(0);
-        Rectangle rectangle = field.getWidgets().get(0).getRectangle().toRectangle();
+        Rectangle rectangle = widget.getRectangle().toRectangle();
         rectangle = new Rectangle(-rectangle.getWidth()/4, -rectangle.getHeight()/4, rectangle.getWidth(), rectangle.getHeight());
         PdfFormXObject xObject = new PdfFormXObject(rectangle);
         xObject.makeIndirect(pdfDocument);
